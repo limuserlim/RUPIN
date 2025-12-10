@@ -96,8 +96,7 @@ st.title(f"{selected_agent_name}")
 
 # --- אתחול המודל ---
 # שימוש במודל היציב ביותר לענן
-MODEL_NAME = "gemini-1.5-flash" 
-
+MODEL_NAME = "gemini-flash-latest"
 if "chat_session" not in st.session_state or st.session_state.chat_session is None:
     current_system_instruction = AGENTS[selected_agent_name]
     
