@@ -1,5 +1,8 @@
 import streamlit as st
 import google.generativeai as genai
+import tempfile
+import os
+import pandas as pd
 
 # --- 1. הגדרת המפתח ---
 try:
@@ -64,6 +67,53 @@ AGENTS = {
 # --- 4. הממשק הגרפי (Streamlit) ---
 st.set_page_config(page_title="העוזר של ראש המגמה", page_icon="🎓", layout="wide")
 
+# --- פונקציה להעלאת קובץ ---
+def upload_to_gemini(uploaded_file):
+    try:
+        suffix = f".{uploaded_file.name.split('.')[-1].lower()}"
+        mime_type = uploaded_file.type
+        
+        # יצירת קובץ זמני
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+            # המרת אקסל ל-CSV
+            if suffix in ['.xlsx', '.xls']:
+                with st.spinner("ממיר אקסל לקריאה..."):
+                    df = pd.read_excel(uploaded_file)
+                    new_path = tmp_file.name.replace(suffix, ".csv")
+                    df.to_csv(new_path, index=False, encoding='utf-8')
+                    tmp_path = new_path
+                    mime_type = "text/csv"
+            else:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
+
+        # העלאה לגוגל
+        with st.spinner("שולח לג'מיני..."):
+            gemini_file = genai.upload_file(tmp_path, mime_type=mime_type)
+        
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            
+        return gemini_file
+        
+    except Exception as e:
+        st.error(f"שגיאה בעיבוד הקובץ: {e}")
+        return None
+
+
+# --- סרגל צד ---
+with st.sidebar:
+    st.header("העלאת נתונים")
+    uploaded_file = st.file_uploader("בחר קובץ", type=['pdf', 'txt', 'csv', 'xlsx', 'xls', 'jpg', 'png'])
+    
+    if uploaded_file:
+        if "last_uploaded" not in st.session_state or st.session_state.last_uploaded != uploaded_file.name:
+            gemini_file = upload_to_gemini(uploaded_file) # קריאה לפונקציה מחלק 2
+            if gemini_file:
+                st.session_state.current_file = gemini_file
+                st.session_state.last_uploaded = uploaded_file.name
+                st.success(f"הקובץ {uploaded_file.name} נקלט בהצלחה!")
+
 with st.sidebar:
     st.title("בחרי את המומחה")
     st.write("עם מי תרצי לעבוד היום?")
@@ -126,4 +176,5 @@ if prompt := st.chat_input("כתוב כאן..."):
             message_placeholder.markdown(response.text)
             st.session_state.messages.append({"role": "model", "content": response.text})
         except Exception as e:
+
             st.error(f"שגיאה: {e}")
