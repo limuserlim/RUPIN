@@ -221,10 +221,10 @@ class Scheduler:
         for item in group:
             self.errors.append({'Course': item.get('Course'), 'Lecturer': item.get('Lecturer'), 'Reason': reason, 'LinkID': item.get('LinkID')})
 
-# ================= 4. CHAT FUNCTIONS (Robust Fallback) =================
+# ================= 4. CHAT FUNCTIONS (Fixed List) =================
 
 def init_chat_session(schedule_df, errors_df, api_key):
-    """Initializes chat by trying a HARDCODED list of safe models."""
+    """Initializes chat by iterating through a SAFE list of models."""
     if not HAS_GENAI or not api_key: return None
     
     genai.configure(api_key=api_key)
@@ -252,13 +252,11 @@ def init_chat_session(schedule_df, errors_df, api_key):
     Answer ONLY based on this data. Use Hebrew.
     """
 
-    # 3. רשימת מודלים בטוחים (בסדר יורד)
-    # אנחנו לא סומכים על list_models יותר כי הוא מביא מודלים סגורים
+    # 3. רשימת מודלים בטוחים (בלי 2.5-pro שעושה צרות)
     safe_models = [
-        "gemini-1.5-flash", # הכי מומלץ, חינמי ומהיר
-        "gemini-1.5-pro",   # חזק יותר, לפעמים מכסה מלאה
-        "gemini-pro",       # הישן והטוב
-        "gemini-1.0-pro"    # שם אלטרנטיבי לישן
+        "gemini-1.5-flash", # עדיפות עליונה - מכסה גבוהה
+        "gemini-1.5-pro",   # מכסה בינונית
+        "gemini-pro"        # ישן ויציב
     ]
 
     # 4. לולאת ניסוי וטעייה
@@ -267,18 +265,17 @@ def init_chat_session(schedule_df, errors_df, api_key):
 
     for model_name in safe_models:
         try:
-            # מנסים ליצור מודל
+            # מנסים ליצור מודל ולהתחיל שיחה
             model = genai.GenerativeModel(model_name, generation_config=generation_config, safety_settings=safety_settings)
-            # מנסים להתחיל שיחה (פעולה זו בודקת מול השרת)
             chat = model.start_chat(history=[{"role": "user", "parts": prompt}, {"role": "model", "parts": "אני כאן."}])
             
             # אם הגענו לפה - זה עבד!
             active_model = model_name
             chat_session = chat
-            break # יוצאים מהלולאה
+            break 
             
         except Exception as e:
-            # אם נכשל (404 או 429), ממשיכים למודל הבא ברשימה
+            # מתעלמים וממשיכים למודל הבא
             print(f"DEBUG: Failed to init {model_name}: {e}")
             continue
 
@@ -386,7 +383,7 @@ def main_process(courses_file, avail_file, iterations=30):
                 
                 # בדיקה אם האתחול הצליח
                 if st.session_state.gemini_chat is None:
-                    st.error("❌ לא נמצא מודל חינמי זמין (מכסה מלאה או חוסר הרשאות).")
+                    st.error("❌ לא נמצא מודל חינמי זמין (ייתכן עומס זמני).")
                 else:
                     # רענון מפתח
                     if "last_key" not in st.session_state or st.session_state.last_key != api_key:
